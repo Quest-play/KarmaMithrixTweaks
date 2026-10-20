@@ -44,7 +44,8 @@ jobs:
           name: 'KarmaMithrixTweaks'
           version: ${{ github.event.release.tag_name }}
           description: 'Customizable Karma Mithrix.'
-          file: './package.zip'
+          repo: 'https://thunderstore.io'
+          file: 'package.zip'
           categories: |
             mods
             tweaks
