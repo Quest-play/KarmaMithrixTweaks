@@ -1,0 +1,50 @@
+name: Publish to Thunderstore
+
+on:
+  release:
+    types: [published]
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout Repository
+        uses: actions/checkout@v4
+
+      # Downloads the .zip package attached to the published GitHub release
+      - name: Download Release Asset (.zip)
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const release = await github.rest.repos.getReleaseByTag({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              tag: context.payload.release.tag_name
+            });
+            const asset = release.data.assets.find(a => a.name.endsWith('.zip'));
+            if (!asset) {
+              throw new Error('No .zip asset found in the published release! Please attach the mod zip to the release.');
+            }
+            const response = await github.rest.repos.getReleaseAsset({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              asset_id: asset.id,
+              headers: { accept: 'application/octet-stream' }
+            });
+            fs.writeFileSync('./package.zip', Buffer.from(response.data));
+
+      # Uploads to Thunderstore using tcli wrapper action
+      - name: Upload to Thunderstore
+        uses: GreenTF/upload-thunderstore-package@v4.3
+        with:
+          token: ${{ secrets.THUNDERSTORE_TOKEN }}
+          community: 'riskofrain2'
+          namespace: ${{ secrets.THUNDERSTORE_NAMESPACE }}
+          name: 'KarmaMithrixTweaks'
+          version: ${{ github.event.release.tag_name }}
+          description: 'Customizable Karma Mithrix.'
+          file: './package.zip'
+          categories: |
+            mods
+            tweaks

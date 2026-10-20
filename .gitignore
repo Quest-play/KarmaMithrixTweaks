@@ -1,0 +1,26 @@
+# Build output
+bin/
+obj/
+publish/
+dist/
+
+# Local scripts
+package.ps1
+
+# Visual Studio / Rider / VSCode
+.vs/
+.idea/
+.vscode/
+*.user
+*.suo
+*.userosscache
+*.sln.docstates
+
+# NuGet packages
+*.nupkg
+*.snupkg
+
+# Temporary files
+*.log
+*.tmp
+

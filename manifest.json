@@ -1,0 +1,9 @@
+{
+  "name": "KarmaMithrixTweaks",
+  "version_number": "1.0.0",
+  "website_url": "https://github.com/Quest-play/KarmaMithrixTweaks",
+  "description": "Customizable Karma Mithrix.",
+  "dependencies": [
+    "bbepis-BepInExPack-5.4.2117"
+  ]
+}
