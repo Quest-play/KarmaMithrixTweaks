@@ -11,7 +11,7 @@ namespace KarmaMithrixTweaks
     {
         public const string PluginGUID = "ua.quest-play.karmamithrixtweaks";
         public const string PluginName = "KarmaMithrixTweaks";
-        public const string PluginVersion = "1.0.0";
+        public const string PluginVersion = "1.0.1";
 
         public static ManualLogSource Log { get; private set; }
         private Harmony _harmony;

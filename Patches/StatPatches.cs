@@ -1,5 +1,5 @@
-using System;
-using System.Reflection;
+using System.Collections.Generic;
+using System.Reflection.Emit;
 using HarmonyLib;
 using KarmaMithrixTweaks.Configuration;
 using RoR2;
@@ -9,72 +9,77 @@ namespace KarmaMithrixTweaks.Patches
 {
     public static class StatPatches
     {
-        private static Action<CharacterBody, float> _setMaxHealth;
-        private static Action<CharacterBody, float> _setMoveSpeed;
-        private static Action<CharacterBody, float> _setAttackSpeed;
-        private static Action<CharacterBody, float> _setDamage;
-
-        static StatPatches()
+        public static float GetKarma8HealthMultiplier()
         {
-            var propMaxHealth = typeof(CharacterBody).GetProperty(nameof(CharacterBody.maxHealth), BindingFlags.Public | BindingFlags.Instance);
-            if (propMaxHealth?.GetSetMethod(true) != null)
-            {
-                _setMaxHealth = (Action<CharacterBody, float>)Delegate.CreateDelegate(typeof(Action<CharacterBody, float>), propMaxHealth.GetSetMethod(true));
-            }
+            return Mathf.Clamp(ModConfig.Karma8HealthMultiplier.Value, 1.0f, 3.0f);
+        }
 
-            var propMoveSpeed = typeof(CharacterBody).GetProperty(nameof(CharacterBody.moveSpeed), BindingFlags.Public | BindingFlags.Instance);
-            if (propMoveSpeed?.GetSetMethod(true) != null)
-            {
-                _setMoveSpeed = (Action<CharacterBody, float>)Delegate.CreateDelegate(typeof(Action<CharacterBody, float>), propMoveSpeed.GetSetMethod(true));
-            }
+        public static float GetKarma2SpeedMultiplier()
+        {
+            return ModConfig.Karma2StatBuffEnabled.Value ? 1.3f : 1.0f;
+        }
 
-            var propAttackSpeed = typeof(CharacterBody).GetProperty(nameof(CharacterBody.attackSpeed), BindingFlags.Public | BindingFlags.Instance);
-            if (propAttackSpeed?.GetSetMethod(true) != null)
-            {
-                _setAttackSpeed = (Action<CharacterBody, float>)Delegate.CreateDelegate(typeof(Action<CharacterBody, float>), propAttackSpeed.GetSetMethod(true));
-            }
-
-            var propDamage = typeof(CharacterBody).GetProperty(nameof(CharacterBody.damage), BindingFlags.Public | BindingFlags.Instance);
-            if (propDamage?.GetSetMethod(true) != null)
-            {
-                _setDamage = (Action<CharacterBody, float>)Delegate.CreateDelegate(typeof(Action<CharacterBody, float>), propDamage.GetSetMethod(true));
-            }
+        public static double GetKarma7DamageScaling()
+        {
+            return ModConfig.Karma7DamageScalingEnabled.Value ? 0.01 : 0.0;
         }
 
         [HarmonyPatch(typeof(CharacterBody), nameof(CharacterBody.RecalculateStats))]
-        [HarmonyPostfix]
-        public static void RecalculateStatsPostfix(CharacterBody __instance)
+        [HarmonyTranspiler]
+        public static IEnumerable<CodeInstruction> RecalculateStatsTranspiler(IEnumerable<CodeInstruction> instructions)
         {
-            if (!BrotherKarmaUtils.IsBrother(__instance))
+            var matcher = new CodeMatcher(instructions);
+
+            var maxKarmaField = AccessTools.Field(typeof(KarmaManager), nameof(KarmaManager.maxKarma));
+            if (maxKarmaField == null)
             {
-                return;
+                KarmaMithrixTweaksPlugin.Log.LogError("StatPatches: Failed to find KarmaManager.maxKarma field!");
+                return instructions;
             }
 
-            int karma = KarmaManager.instance ? KarmaManager.instance.GetEffectiveKarma() : 0;
-            if (karma <= 0)
+            matcher.MatchForward(false, new CodeMatch(OpCodes.Ldsfld, maxKarmaField));
+            if (matcher.IsInvalid)
             {
-                return;
+                KarmaMithrixTweaksPlugin.Log.LogError("StatPatches: Could not find KarmaManager.maxKarma in RecalculateStats IL!");
+                return instructions;
             }
 
-            if (karma >= 2 && !ModConfig.Karma2StatBuffEnabled.Value)
-            {
-                if (_setMoveSpeed != null) _setMoveSpeed(__instance, __instance.moveSpeed / 1.3f);
-                if (_setAttackSpeed != null) _setAttackSpeed(__instance, __instance.attackSpeed / 1.3f);
-            }
+            int maxKarmaPos = matcher.Pos;
 
-            if (!ModConfig.Karma7DamageScalingEnabled.Value)
+            matcher.MatchForward(false, new CodeMatch(OpCodes.Ldc_R4, 1.5f));
+            if (matcher.IsInvalid)
             {
-                if (_setDamage != null) _setDamage(__instance, __instance.damage / (float)(1.0 + 0.01 * (double)karma));
+                KarmaMithrixTweaksPlugin.Log.LogError("StatPatches: Could not find health 1.5f in RecalculateStats IL!");
+                return instructions;
             }
+            matcher.SetInstruction(new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(StatPatches), nameof(GetKarma8HealthMultiplier))));
 
-            if (karma >= 8 && _setMaxHealth != null)
+            matcher.Start().Advance(maxKarmaPos);
+            matcher.MatchBack(false, new CodeMatch(OpCodes.Ldc_R4, 1.3f));
+            if (matcher.IsInvalid)
             {
-                float targetMult = Mathf.Clamp(ModConfig.Karma8HealthMultiplier.Value, 1.0f, 3.0f);
-                if (Mathf.Abs(targetMult - 1.5f) > 0.01f)
-                {
-                    _setMaxHealth(__instance, (__instance.maxHealth / 1.5f) * targetMult);
-                }
+                KarmaMithrixTweaksPlugin.Log.LogError("StatPatches: Could not find attackSpeed 1.3f in RecalculateStats IL!");
+                return instructions;
             }
+            matcher.SetInstruction(new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(StatPatches), nameof(GetKarma2SpeedMultiplier))));
+
+            matcher.MatchBack(false, new CodeMatch(OpCodes.Ldc_R4, 1.3f));
+            if (matcher.IsInvalid)
+            {
+                KarmaMithrixTweaksPlugin.Log.LogError("StatPatches: Could not find moveSpeed 1.3f in RecalculateStats IL!");
+                return instructions;
+            }
+            matcher.SetInstruction(new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(StatPatches), nameof(GetKarma2SpeedMultiplier))));
+
+            matcher.MatchBack(false, new CodeMatch(OpCodes.Ldc_R8, 0.01));
+            if (matcher.IsInvalid)
+            {
+                KarmaMithrixTweaksPlugin.Log.LogError("StatPatches: Could not find damage scaling 0.01 in RecalculateStats IL!");
+                return instructions;
+            }
+            matcher.SetInstruction(new CodeInstruction(OpCodes.Call, AccessTools.Method(typeof(StatPatches), nameof(GetKarma7DamageScaling))));
+
+            return matcher.InstructionEnumeration();
         }
     }
 }

@@ -3,6 +3,7 @@ bin/
 obj/
 publish/
 dist/
+docs/
 
 # Local scripts
 package.ps1
